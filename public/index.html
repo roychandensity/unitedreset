@@ -344,7 +344,14 @@
 
     let spacesCache = {};
     let editingSpaceId = null;
-    let activeOverrides = {}; // track which spaces have overrides
+    let activeOverrides = {};
+
+    async function fetchOverrideStatus() {
+      try {
+        const res = await fetch('/api/override/status');
+        if (res.ok) activeOverrides = await res.json();
+      } catch {}
+    }
 
     function renderSpaces(spaces, occupancy) {
       const container = document.getElementById('spaces-container');
@@ -511,7 +518,7 @@
     });
 
     // Initial load + polling
-    fetchSpaces().then(() => refresh());
+    Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => refresh());
     setInterval(refresh, POLL_INTERVAL);
   </script>
 </body>
