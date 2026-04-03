@@ -154,6 +154,18 @@ app.post('/api/override', requireAuth, async (req, res) => {
 
     await redis.set(`offset:${spaceId}`, offset);
 
+    // Log the override to history
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      spaceId,
+      previousCount: currentCount,
+      newCount,
+      action: 'override'
+    };
+    await redis.lpush('reset_log', JSON.stringify(logEntry));
+    // Keep last 100 entries
+    await redis.ltrim('reset_log', 0, 99);
+
     res.json({ success: true, densityCount: currentCount, newCount, offset });
   } catch (err) {
     console.error('Error setting override:', err.message);
@@ -166,13 +178,39 @@ app.post('/api/override/clear', requireAuth, async (req, res) => {
   const { spaceId } = req.body;
   if (spaceId) {
     await redis.del(`offset:${spaceId}`);
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      spaceId,
+      action: 'clear'
+    };
+    await redis.lpush('reset_log', JSON.stringify(logEntry));
+    await redis.ltrim('reset_log', 0, 99);
   } else {
     const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
     for (const id of spaceIds) {
       await redis.del(`offset:${id}`);
     }
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      spaceId: 'all',
+      action: 'clear'
+    };
+    await redis.lpush('reset_log', JSON.stringify(logEntry));
+    await redis.ltrim('reset_log', 0, 99);
   }
   res.json({ success: true });
+});
+
+// Get reset history log
+app.get('/api/log', requireAuth, async (req, res) => {
+  try {
+    const entries = await redis.lrange('reset_log', 0, 49);
+    const parsed = entries.map(e => typeof e === 'string' ? JSON.parse(e) : e);
+    res.json(parsed);
+  } catch (err) {
+    console.error('Error fetching log:', err.message);
+    res.status(500).json({ error: 'Failed to fetch log' });
+  }
 });
 
 // Check if a space has an active override

@@ -306,6 +306,48 @@
       background: #3b82f6;
       color: #fff;
     }
+
+    /* Reset Log */
+    .log-section {
+      margin-top: 48px;
+    }
+
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .log-table th {
+      text-align: left;
+      color: #8899aa;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e3a5f;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .log-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1b2d44;
+      color: #ccd6e0;
+    }
+
+    .log-action-override {
+      color: #f59e0b;
+    }
+
+    .log-action-clear {
+      color: #8899aa;
+    }
+
+    .log-empty {
+      color: #8899aa;
+      font-size: 14px;
+      padding: 20px 0;
+    }
   </style>
 </head>
 <body>
@@ -326,6 +368,14 @@
 
     <div id="spaces-container">
       <div class="status-message">Loading...</div>
+    </div>
+
+    <div class="log-section">
+      <div class="section-title">Reset Log</div>
+      <div class="divider"></div>
+      <div id="log-container">
+        <div class="log-empty">No resets yet</div>
+      </div>
     </div>
   </div>
 
@@ -448,6 +498,7 @@
 
       editingSpaceId = null;
       refresh();
+      fetchLog();
     }
 
     async function clearOverride(spaceId) {
@@ -462,6 +513,7 @@
         console.error(err);
       }
       refresh();
+      fetchLog();
     }
 
     let lastOccupancy = {};
@@ -517,9 +569,72 @@
       window.location.href = '/';
     });
 
+    // Reset log
+    function toCST(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleString('en-US', {
+        timeZone: 'America/Chicago',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }) + ' CST';
+    }
+
+    function getSpaceName(spaceId) {
+      return spacesCache[spaceId]?.name || spaceId;
+    }
+
+    async function fetchLog() {
+      try {
+        const res = await fetch('/api/log');
+        if (!res.ok) return;
+        const entries = await res.json();
+        const container = document.getElementById('log-container');
+
+        if (!entries.length) {
+          container.innerHTML = '<div class="log-empty">No resets yet</div>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Timestamp (CST)</th>
+                <th>Space</th>
+                <th>Action</th>
+                <th>Previous Count</th>
+                <th>New Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${entries.map(e => `
+                <tr>
+                  <td>${toCST(e.timestamp)}</td>
+                  <td>${getSpaceName(e.spaceId)}</td>
+                  <td class="log-action-${e.action}">${e.action === 'override' ? 'Reset' : 'Cleared'}</td>
+                  <td>${e.action === 'override' ? e.previousCount : '-'}</td>
+                  <td>${e.action === 'override' ? e.newCount : '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        console.error('Error fetching log:', err);
+      }
+    }
+
     // Initial load + polling
-    Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => refresh());
-    setInterval(refresh, POLL_INTERVAL);
+    Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => {
+      refresh();
+      fetchLog();
+    });
+    setInterval(() => { refresh(); fetchLog(); }, POLL_INTERVAL);
   </script>
 </body>
 </html>
