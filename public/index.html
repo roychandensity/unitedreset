@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Occupancy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #0d1b2a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 48px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+
+    .logo-area {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      border-radius: 4px;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .logo-subtitle {
+      font-size: 12px;
+      color: #8899aa;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid #2a3f5f;
+      color: #8899aa;
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .logout-btn:hover {
+      color: #fff;
+      border-color: #3b82f6;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .divider {
+      height: 2px;
+      background: linear-gradient(90deg, #3b82f6, transparent);
+      margin-bottom: 32px;
+    }
+
+    /* Space row */
+    .space-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      border-bottom: 1px solid #1b2d44;
+    }
+
+    .space-row:last-child {
+      border-bottom: none;
+    }
+
+    .space-info h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .space-meta {
+      font-size: 14px;
+      color: #8899aa;
+    }
+
+    .space-stats {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .count-display {
+      text-align: right;
+    }
+
+    .count-number {
+      font-size: 48px;
+      font-weight: 700;
+      color: #4ade80;
+      line-height: 1;
+    }
+
+    .count-label {
+      font-size: 13px;
+      color: #8899aa;
+      margin-top: 2px;
+    }
+
+    /* Circular progress */
+    .progress-ring-container {
+      position: relative;
+      width: 72px;
+      height: 72px;
+    }
+
+    .progress-ring {
+      transform: rotate(-90deg);
+      width: 72px;
+      height: 72px;
+    }
+
+    .progress-ring-bg {
+      fill: none;
+      stroke: #1e3a5f;
+      stroke-width: 5;
+    }
+
+    .progress-ring-fill {
+      fill: none;
+      stroke: #4ade80;
+      stroke-width: 5;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s ease;
+    }
+
+    .progress-percent {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    /* At capacity */
+    .count-number.at-capacity { color: #f87171; }
+    .progress-ring-fill.at-capacity { stroke: #f87171; }
+
+    /* Footer */
+    .footer {
+      padding: 24px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #ccc;
+    }
+
+    .live-dot {
+      width: 12px;
+      height: 12px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .live-dot.offline {
+      background: #f87171;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .powered-by {
+      font-size: 13px;
+      color: #8899aa;
+    }
+
+    .status-message {
+      color: #8899aa;
+      font-size: 16px;
+      padding: 40px 0;
+    }
+
+    /* Override controls */
+    .count-number {
+      cursor: pointer;
+    }
+
+    .count-number:hover {
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    .override-form {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .override-input {
+      width: 100px;
+      padding: 6px 10px;
+      background: #1b2d44;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      text-align: right;
+      outline: none;
+    }
+
+    .override-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .override-btn.save {
+      background: #4ade80;
+      color: #0d1b2a;
+    }
+
+    .override-btn.cancel {
+      background: none;
+      border: 1px solid #2a3f5f;
+      color: #8899aa;
+    }
+
+    .override-btn.clear {
+      background: none;
+      border: 1px solid #f87171;
+      color: #f87171;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+
+    .override-badge {
+      font-size: 11px;
+      color: #f59e0b;
+      margin-top: 2px;
+    }
+
+    .reset-btn {
+      padding: 8px 16px;
+      background: #1b2d44;
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      color: #3b82f6;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .reset-btn:hover {
+      background: #3b82f6;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-area">
+        <div class="logo-row">
+          <img src="/density-logo.jpg" alt="Density" class="logo-img">
+          <div class="logo">Density</div>
+        </div>
+        <div class="logo-subtitle">Manual Reset</div>
+      </div>
+      <button class="logout-btn" id="logout-btn">Logout</button>
+    </div>
+
+    <div class="section-title">Live Occupancy</div>
+    <div class="divider"></div>
+
+    <div id="spaces-container">
+      <div class="status-message">Loading...</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="live-indicator">
+      <div class="live-dot" id="live-dot"></div>
+      <span id="live-status">Live</span>
+    </div>
+    <div class="powered-by">Powered By Density</div>
+  </div>
+
+  <script>
+    const RADIUS = 30;
+    const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+    const POLL_INTERVAL = 30000; // 30 seconds
+
+    let spacesCache = {};
+    let editingSpaceId = null;
+    let activeOverrides = {}; // track which spaces have overrides
+
+    function renderSpaces(spaces, occupancy) {
+      const container = document.getElementById('spaces-container');
+      if (!spaces.length) {
+        container.innerHTML = '<div class="status-message">No spaces configured</div>';
+        return;
+      }
+
+      container.innerHTML = spaces.map(space => {
+        const occ = occupancy[space.id];
+        const count = occ ? occ.count : 0;
+        const capacity = space.capacity || 0;
+        const pct = capacity > 0 ? Math.min(Math.round((count / capacity) * 100), 100) : 0;
+        const atCapacity = capacity > 0 && count >= capacity;
+        const offset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
+        const isEditing = editingSpaceId === space.id;
+        const hasOverride = activeOverrides[space.id];
+
+        return `
+          <div class="space-row">
+            <div class="space-info">
+              <h2>${space.name}</h2>
+              <div class="space-meta">${space.function || ''}</div>
+            </div>
+            <div class="space-stats">
+              ${isEditing ? `
+                <div class="override-form">
+                  <input type="number" class="override-input" id="override-input-${space.id}" value="${count}" min="0" autofocus>
+                  <button class="override-btn save" onclick="submitOverride('${space.id}')">Set</button>
+                  <button class="override-btn cancel" onclick="cancelOverride()">Cancel</button>
+                </div>
+              ` : `
+                <button class="reset-btn" onclick="startOverride('${space.id}')">
+                  ${hasOverride ? 'Change Count' : 'Reset Count'}
+                </button>
+                ${hasOverride ? `<button class="override-btn clear" onclick="clearOverride('${space.id}')">Undo</button>` : ''}
+                <div class="count-display">
+                  <div class="count-number ${atCapacity ? 'at-capacity' : ''}">${count}</div>
+                  <div class="count-label">people</div>
+                  ${hasOverride ? `<div class="override-badge">overridden</div>` : ''}
+                </div>
+              `}
+              ${capacity > 0 ? `
+              <div class="progress-ring-container">
+                <svg class="progress-ring" viewBox="0 0 72 72">
+                  <circle class="progress-ring-bg" cx="36" cy="36" r="${RADIUS}"/>
+                  <circle class="progress-ring-fill ${atCapacity ? 'at-capacity' : ''}" cx="36" cy="36" r="${RADIUS}"
+                    stroke-dasharray="${CIRCUMFERENCE}"
+                    stroke-dashoffset="${offset}"/>
+                </svg>
+                <div class="progress-percent">${pct}%</div>
+              </div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Focus the input if editing
+      if (editingSpaceId) {
+        const input = document.getElementById(`override-input-${editingSpaceId}`);
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    }
+
+    function startOverride(spaceId) {
+      editingSpaceId = spaceId;
+      renderSpaces(Object.values(spacesCache), lastOccupancy);
+    }
+
+    function cancelOverride() {
+      editingSpaceId = null;
+      renderSpaces(Object.values(spacesCache), lastOccupancy);
+    }
+
+    async function submitOverride(spaceId) {
+      const input = document.getElementById(`override-input-${spaceId}`);
+      const newCount = parseInt(input.value, 10);
+      if (isNaN(newCount) || newCount < 0) return;
+
+      try {
+        const res = await fetch('/api/override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spaceId, newCount })
+        });
+        if (!res.ok) throw new Error('Failed to set override');
+        activeOverrides[spaceId] = true;
+      } catch (err) {
+        console.error(err);
+      }
+
+      editingSpaceId = null;
+      refresh();
+    }
+
+    async function clearOverride(spaceId) {
+      try {
+        await fetch('/api/override/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spaceId })
+        });
+        delete activeOverrides[spaceId];
+      } catch (err) {
+        console.error(err);
+      }
+      refresh();
+    }
+
+    let lastOccupancy = {};
+
+    function setLiveStatus(isLive) {
+      const dot = document.getElementById('live-dot');
+      const status = document.getElementById('live-status');
+      dot.classList.toggle('offline', !isLive);
+      status.textContent = isLive ? 'Live' : 'Offline';
+    }
+
+    async function fetchSpaces() {
+      const res = await fetch('/api/spaces');
+      if (res.status === 401) {
+        window.location.href = '/';
+        return [];
+      }
+      if (!res.ok) throw new Error('Failed to fetch spaces');
+      const spaces = await res.json();
+      spaces.forEach(s => { spacesCache[s.id] = s; });
+      return spaces;
+    }
+
+    async function fetchOccupancy() {
+      const res = await fetch('/api/occupancy');
+      if (res.status === 401) {
+        window.location.href = '/';
+        return {};
+      }
+      if (!res.ok) throw new Error('Failed to fetch occupancy');
+      const data = await res.json();
+      return data.data || {};
+    }
+
+    async function refresh() {
+      try {
+        const spaces = Object.keys(spacesCache).length
+          ? Object.values(spacesCache)
+          : await fetchSpaces();
+        const occupancy = await fetchOccupancy();
+        lastOccupancy = occupancy;
+        renderSpaces(spaces, occupancy);
+        setLiveStatus(true);
+      } catch (err) {
+        console.error(err);
+        setLiveStatus(false);
+      }
+    }
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await fetch('/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+
+    // Initial load + polling
+    fetchSpaces().then(() => refresh());
+    setInterval(refresh, POLL_INTERVAL);
+  </script>
+</body>
+</html>
