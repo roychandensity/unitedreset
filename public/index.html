@@ -348,6 +348,36 @@
       font-size: 14px;
       padding: 20px 0;
     }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .history-btn {
+      background: none;
+      border: 1px solid #2a3f5f;
+      color: #8899aa;
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .history-btn:hover {
+      color: #fff;
+      border-color: #3b82f6;
+    }
+
+    .log-date-header {
+      color: #8899aa;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 16px 12px 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
@@ -371,10 +401,13 @@
     </div>
 
     <div class="log-section">
-      <div class="section-title">Reset Log</div>
+      <div class="log-header">
+        <div class="section-title">Today's Resets</div>
+        <button class="history-btn" id="history-btn" onclick="toggleHistory()">View History</button>
+      </div>
       <div class="divider"></div>
       <div id="log-container">
-        <div class="log-empty">No resets yet</div>
+        <div class="log-empty">No resets today</div>
       </div>
     </div>
   </div>
@@ -570,6 +603,9 @@
     });
 
     // Reset log
+    let allLogEntries = [];
+    let showingHistory = false;
+
     function toCST(isoString) {
       const date = new Date(isoString);
       return date.toLocaleString('en-US', {
@@ -584,46 +620,80 @@
       }) + ' CST';
     }
 
+    function getTodayCST() {
+      const now = new Date();
+      return now.toLocaleDateString('en-US', { timeZone: 'America/Chicago' });
+    }
+
+    function getDateCST(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('en-US', { timeZone: 'America/Chicago' });
+    }
+
     function getSpaceName(spaceId) {
       return spacesCache[spaceId]?.name || spaceId;
+    }
+
+    function renderLogTable(entries, emptyMessage) {
+      if (!entries.length) {
+        return `<div class="log-empty">${emptyMessage}</div>`;
+      }
+
+      return `
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Timestamp (CST)</th>
+              <th>Space</th>
+              <th>Action</th>
+              <th>Previous Count</th>
+              <th>New Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(e => `
+              <tr>
+                <td>${toCST(e.timestamp)}</td>
+                <td>${getSpaceName(e.spaceId)}</td>
+                <td class="log-action-${e.action}">${e.action === 'override' ? 'Reset' : 'Cleared'}</td>
+                <td>${e.action === 'override' ? e.previousCount : '-'}</td>
+                <td>${e.action === 'override' ? e.newCount : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderLog() {
+      const container = document.getElementById('log-container');
+      const title = document.querySelector('.log-section .section-title');
+      const btn = document.getElementById('history-btn');
+
+      if (showingHistory) {
+        title.textContent = 'Reset History';
+        btn.textContent = 'Show Today';
+        container.innerHTML = renderLogTable(allLogEntries, 'No resets recorded');
+      } else {
+        title.textContent = "Today's Resets";
+        btn.textContent = 'View History';
+        const today = getTodayCST();
+        const todayEntries = allLogEntries.filter(e => getDateCST(e.timestamp) === today);
+        container.innerHTML = renderLogTable(todayEntries, 'No resets today');
+      }
+    }
+
+    function toggleHistory() {
+      showingHistory = !showingHistory;
+      renderLog();
     }
 
     async function fetchLog() {
       try {
         const res = await fetch('/api/log');
         if (!res.ok) return;
-        const entries = await res.json();
-        const container = document.getElementById('log-container');
-
-        if (!entries.length) {
-          container.innerHTML = '<div class="log-empty">No resets yet</div>';
-          return;
-        }
-
-        container.innerHTML = `
-          <table class="log-table">
-            <thead>
-              <tr>
-                <th>Timestamp (CST)</th>
-                <th>Space</th>
-                <th>Action</th>
-                <th>Previous Count</th>
-                <th>New Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${entries.map(e => `
-                <tr>
-                  <td>${toCST(e.timestamp)}</td>
-                  <td>${getSpaceName(e.spaceId)}</td>
-                  <td class="log-action-${e.action}">${e.action === 'override' ? 'Reset' : 'Cleared'}</td>
-                  <td>${e.action === 'override' ? e.previousCount : '-'}</td>
-                  <td>${e.action === 'override' ? e.newCount : '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `;
+        allLogEntries = await res.json();
+        renderLog();
       } catch (err) {
         console.error('Error fetching log:', err);
       }
