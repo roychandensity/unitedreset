@@ -378,6 +378,83 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+
+    /* Usage stats */
+    .stats-section {
+      margin-top: 48px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: #1b2d44;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #3b82f6;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #8899aa;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .stats-table th {
+      text-align: left;
+      color: #8899aa;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e3a5f;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stats-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1b2d44;
+      color: #ccd6e0;
+    }
+
+    .stats-toggle {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stats-toggle button {
+      background: none;
+      border: 1px solid #2a3f5f;
+      color: #8899aa;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .stats-toggle button.active {
+      border-color: #3b82f6;
+      color: #3b82f6;
+    }
   </style>
 </head>
 <body>
@@ -408,6 +485,19 @@
       <div class="divider"></div>
       <div id="log-container">
         <div class="log-empty">No resets today</div>
+      </div>
+    </div>
+    <div class="stats-section">
+      <div class="log-header">
+        <div class="section-title">Usage Stats</div>
+        <div class="stats-toggle">
+          <button class="active" onclick="fetchStats(7)" id="stats-7d">7 days</button>
+          <button onclick="fetchStats(30)" id="stats-30d">30 days</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div id="stats-container">
+        <div class="log-empty">Loading stats...</div>
       </div>
     </div>
   </div>
@@ -699,10 +789,96 @@
       }
     }
 
+    // --- Usage stats ---
+    let currentStatsDays = 7;
+
+    async function fetchStats(days = 7) {
+      currentStatsDays = days;
+      // Update toggle buttons
+      document.getElementById('stats-7d').classList.toggle('active', days === 7);
+      document.getElementById('stats-30d').classList.toggle('active', days === 30);
+
+      try {
+        const res = await fetch(`/api/stats?days=${days}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderStats(data);
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      }
+    }
+
+    function renderStats(data) {
+      const container = document.getElementById('stats-container');
+      const { stats } = data;
+
+      // Totals for the period
+      const totals = stats.reduce((acc, d) => ({
+        page_views: acc.page_views + d.page_views,
+        logins: acc.logins + d.logins,
+        resets: acc.resets + d.resets,
+        clears: acc.clears + d.clears,
+        unique_users: acc.unique_users + d.unique_users
+      }), { page_views: 0, logins: 0, resets: 0, clears: 0, unique_users: 0 });
+
+      // Today's stats
+      const today = stats[0] || {};
+
+      container.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${today.unique_users || 0}</div>
+            <div class="stat-label">Users Today</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${today.page_views || 0}</div>
+            <div class="stat-label">Views Today</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${today.resets || 0}</div>
+            <div class="stat-label">Resets Today</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${totals.unique_users}</div>
+            <div class="stat-label">Users (${currentStatsDays}d)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${totals.page_views}</div>
+            <div class="stat-label">Views (${currentStatsDays}d)</div>
+          </div>
+        </div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Unique Users</th>
+              <th>Page Views</th>
+              <th>Logins</th>
+              <th>Resets</th>
+              <th>Clears</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stats.filter(d => d.page_views || d.logins || d.resets || d.clears || d.unique_users).map(d => `
+              <tr>
+                <td>${d.date}</td>
+                <td>${d.unique_users}</td>
+                <td>${d.page_views}</td>
+                <td>${d.logins}</td>
+                <td>${d.resets}</td>
+                <td>${d.clears}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6" style="color:#8899aa">No data yet</td></tr>'}
+          </tbody>
+        </table>
+      `;
+    }
+
     // Initial load + polling
     Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => {
       refresh();
       fetchLog();
+      fetchStats(7);
     });
     setInterval(() => { refresh(); fetchLog(); }, POLL_INTERVAL);
   </script>
