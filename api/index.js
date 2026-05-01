@@ -251,13 +251,18 @@ app.get('/api/log', requireAuth, async (req, res) => {
 
 // Check if a space has an active override
 app.get('/api/override/status', requireAuth, async (req, res) => {
-  const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
-  const statuses = {};
-  for (const id of spaceIds) {
-    const offset = await redis.get(`offset:${id}`);
-    statuses[id] = offset !== null;
+  try {
+    const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
+    const statuses = {};
+    for (const id of spaceIds) {
+      const offset = await redis.get(`offset:${id}`);
+      statuses[id] = offset !== null;
+    }
+    res.json(statuses);
+  } catch (err) {
+    console.error('Error fetching override status:', err.message);
+    res.status(500).json({ error: 'Failed to fetch override status' });
   }
-  res.json(statuses);
 });
 
 // Usage stats endpoint

@@ -455,6 +455,26 @@
       border-color: #3b82f6;
       color: #3b82f6;
     }
+
+    .stats-dropdown-toggle {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .stats-dropdown-toggle:hover {
+      color: #3b82f6;
+    }
+
+    .stats-arrow {
+      font-size: 14px;
+      display: inline-block;
+      transition: transform 0.2s ease;
+      margin-left: 6px;
+    }
+
+    .stats-arrow.open {
+      transform: rotate(90deg);
+    }
   </style>
 </head>
 <body>
@@ -489,15 +509,16 @@
     </div>
     <div class="stats-section">
       <div class="log-header">
-        <div class="section-title">Usage Stats</div>
-        <div class="stats-toggle">
+        <div class="section-title stats-dropdown-toggle" onclick="toggleStats()">
+          Usage Stats <span class="stats-arrow" id="stats-arrow">&#9654;</span>
+        </div>
+        <div class="stats-toggle" id="stats-toggle" style="display:none;">
           <button class="active" onclick="fetchStats(7)" id="stats-7d">7 days</button>
           <button onclick="fetchStats(30)" id="stats-30d">30 days</button>
         </div>
       </div>
       <div class="divider"></div>
-      <div id="stats-container">
-        <div class="log-empty">Loading stats...</div>
+      <div id="stats-container" style="display:none;">
       </div>
     </div>
   </div>
@@ -791,6 +812,18 @@
 
     // --- Usage stats ---
     let currentStatsDays = 7;
+    let statsOpen = false;
+    let statsFetched = false;
+
+    function toggleStats() {
+      statsOpen = !statsOpen;
+      document.getElementById('stats-container').style.display = statsOpen ? '' : 'none';
+      document.getElementById('stats-toggle').style.display = statsOpen ? '' : 'none';
+      document.getElementById('stats-arrow').classList.toggle('open', statsOpen);
+      if (statsOpen && !statsFetched) {
+        fetchStats(7);
+      }
+    }
 
     async function fetchStats(days = 7) {
       currentStatsDays = days;
@@ -803,6 +836,7 @@
         if (!res.ok) return;
         const data = await res.json();
         renderStats(data);
+        statsFetched = true;
       } catch (err) {
         console.error('Error fetching stats:', err);
       }
@@ -878,7 +912,6 @@
     Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => {
       refresh();
       fetchLog();
-      fetchStats(7);
     });
     setInterval(() => { refresh(); fetchLog(); }, POLL_INTERVAL);
   </script>
