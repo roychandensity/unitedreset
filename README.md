@@ -45,16 +45,16 @@ npm install
 npm start
 ```
 
-The server runs on port 3003 by default.
+The server runs on port 3000 by default.
 
 ## Environment Variables
 
 | Variable | Description |
 |---|---|
-| `DENSITY_API_TOKEN` | Bearer token for the Density API |
+| `DENSITY_API_KEY` | Bearer token for the Density API. `DENSITY_API_TOKEN` is also supported. |
 | `SPACE_IDS` | Comma-separated Density space IDs to monitor |
 | `APP_PASSWORD` | Password for dashboard login |
 | `SESSION_SECRET` | Secret used to sign Express sessions |
-| `PORT` | Server port (defaults to 3003) |
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token |
+| `PORT` | Server port (defaults to 3000) |
+| `KV_REST_API_URL` | Upstash Redis REST URL. `UPSTASH_REDIS_REST_URL` is also supported. |
+| `KV_REST_API_TOKEN` | Upstash Redis REST token. `UPSTASH_REDIS_REST_TOKEN` is also supported. |

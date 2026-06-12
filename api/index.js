@@ -7,15 +7,28 @@ const path = require('path');
 
 const app = express();
 
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const redis = redisUrl && redisToken ? new Redis({
+  url: redisUrl,
+  token: redisToken,
+}) : null;
 
 const JWT_SECRET = process.env.SESSION_SECRET;
+const DENSITY_API_TOKEN = process.env.DENSITY_API_KEY || process.env.DENSITY_API_TOKEN;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+function getSpaceIds() {
+  return (process.env.SPACE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function requireRedis(res) {
+  if (redis) return true;
+  res.status(503).json({ error: 'Reset storage is unavailable' });
+  return false;
+}
 
 // --- Usage tracking helpers ---
 function getDateKey() {
@@ -28,6 +41,7 @@ function hashIP(req) {
 }
 
 async function trackEvent(req, action) {
+  if (!redis) return;
   try {
     const day = getDateKey();
     const userHash = hashIP(req);
@@ -105,9 +119,9 @@ app.post('/logout', (req, res) => {
 app.get('/api/spaces', requireAuth, async (req, res) => {
   await trackEvent(req, 'page_view');
   try {
-    const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
+    const spaceIds = getSpaceIds();
     const response = await fetch('https://api.density.io/v3/spaces', {
-      headers: { 'Authorization': `Bearer ${process.env.DENSITY_API_KEY}` }
+      headers: { 'Authorization': `Bearer ${DENSITY_API_TOKEN}` }
     });
 
     if (!response.ok) {
@@ -128,12 +142,12 @@ app.get('/api/spaces', requireAuth, async (req, res) => {
 // Proxy: get current occupancy from Density
 app.get('/api/occupancy', requireAuth, async (req, res) => {
   try {
-    const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
+    const spaceIds = getSpaceIds();
     const response = await fetch('https://api.density.io/v3/analytics/occupancy/current', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DENSITY_API_KEY}`
+        'Authorization': `Bearer ${DENSITY_API_TOKEN}`
       },
       body: JSON.stringify({ space_ids: spaceIds })
     });
@@ -145,11 +159,15 @@ app.get('/api/occupancy', requireAuth, async (req, res) => {
     const data = await response.json();
 
     // Apply count offsets from Redis
-    if (data.data) {
+    if (redis && data.data) {
       for (const spaceId of Object.keys(data.data)) {
-        const offset = await redis.get(`offset:${spaceId}`);
-        if (offset !== null) {
-          data.data[spaceId].count = Math.max(0, data.data[spaceId].count + Number(offset));
+        try {
+          const offset = await redis.get(`offset:${spaceId}`);
+          if (offset !== null) {
+            data.data[spaceId].count = Math.max(0, data.data[spaceId].count + Number(offset));
+          }
+        } catch (err) {
+          console.error('Error fetching count offset:', err.message);
         }
       }
     }
@@ -167,13 +185,14 @@ app.post('/api/override', requireAuth, async (req, res) => {
   if (!spaceId || typeof newCount !== 'number') {
     return res.status(400).json({ error: 'spaceId and newCount (number) required' });
   }
+  if (!requireRedis(res)) return;
 
   try {
     const response = await fetch('https://api.density.io/v3/analytics/occupancy/current', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DENSITY_API_KEY}`
+        'Authorization': `Bearer ${DENSITY_API_TOKEN}`
       },
       body: JSON.stringify({ space_ids: [spaceId] })
     });
@@ -210,53 +229,69 @@ app.post('/api/override', requireAuth, async (req, res) => {
 
 // Clear override for a space
 app.post('/api/override/clear', requireAuth, async (req, res) => {
+  if (!requireRedis(res)) return;
   await trackEvent(req, 'clear');
   const { spaceId } = req.body;
-  if (spaceId) {
-    await redis.del(`offset:${spaceId}`);
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      spaceId,
-      action: 'clear'
-    };
-    await redis.lpush('reset_log', JSON.stringify(logEntry));
-    await redis.ltrim('reset_log', 0, 99);
-  } else {
-    const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
-    for (const id of spaceIds) {
-      await redis.del(`offset:${id}`);
+  try {
+    if (spaceId) {
+      await redis.del(`offset:${spaceId}`);
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        spaceId,
+        action: 'clear'
+      };
+      await redis.lpush('reset_log', JSON.stringify(logEntry));
+      await redis.ltrim('reset_log', 0, 99);
+    } else {
+      const spaceIds = getSpaceIds();
+      for (const id of spaceIds) {
+        await redis.del(`offset:${id}`);
+      }
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        spaceId: 'all',
+        action: 'clear'
+      };
+      await redis.lpush('reset_log', JSON.stringify(logEntry));
+      await redis.ltrim('reset_log', 0, 99);
     }
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      spaceId: 'all',
-      action: 'clear'
-    };
-    await redis.lpush('reset_log', JSON.stringify(logEntry));
-    await redis.ltrim('reset_log', 0, 99);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing override:', err.message);
+    res.status(502).json({ error: 'Failed to clear override' });
   }
-  res.json({ success: true });
 });
 
 // Get reset history log
 app.get('/api/log', requireAuth, async (req, res) => {
+  if (!redis) return res.json([]);
   try {
     const entries = await redis.lrange('reset_log', 0, 49);
     const parsed = entries.map(e => typeof e === 'string' ? JSON.parse(e) : e);
     res.json(parsed);
   } catch (err) {
     console.error('Error fetching log:', err.message);
-    res.status(500).json({ error: 'Failed to fetch log' });
+    res.json([]);
   }
 });
 
 // Check if a space has an active override
 app.get('/api/override/status', requireAuth, async (req, res) => {
   try {
-    const spaceIds = process.env.SPACE_IDS.split(',').map(s => s.trim());
+    const spaceIds = getSpaceIds();
     const statuses = {};
+    if (!redis) {
+      spaceIds.forEach(id => { statuses[id] = false; });
+      return res.json(statuses);
+    }
     for (const id of spaceIds) {
-      const offset = await redis.get(`offset:${id}`);
-      statuses[id] = offset !== null;
+      try {
+        const offset = await redis.get(`offset:${id}`);
+        statuses[id] = offset !== null;
+      } catch (err) {
+        console.error('Error fetching override status:', err.message);
+        statuses[id] = false;
+      }
     }
     res.json(statuses);
   } catch (err) {
@@ -275,8 +310,16 @@ app.get('/api/stats', requireAuth, async (req, res) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const day = d.toISOString().slice(0, 10);
-      const counters = await redis.hgetall(`stats:${day}`) || {};
-      const uniqueUsers = await redis.scard(`stats:${day}:users`) || 0;
+      let counters = {};
+      let uniqueUsers = 0;
+      if (redis) {
+        try {
+          counters = await redis.hgetall(`stats:${day}`) || {};
+          uniqueUsers = await redis.scard(`stats:${day}:users`) || 0;
+        } catch (err) {
+          console.error('Error fetching daily stats:', err.message);
+        }
+      }
       stats.push({
         date: day,
         page_views: Number(counters.page_view || 0),
@@ -288,7 +331,14 @@ app.get('/api/stats', requireAuth, async (req, res) => {
     }
 
     // Recent activity
-    const recent = await redis.lrange('usage_log', 0, 49);
+    let recent = [];
+    if (redis) {
+      try {
+        recent = await redis.lrange('usage_log', 0, 49);
+      } catch (err) {
+        console.error('Error fetching recent activity:', err.message);
+      }
+    }
     const parsed = recent.map(e => typeof e === 'string' ? JSON.parse(e) : e);
 
     res.json({ stats, recent_activity: parsed });
