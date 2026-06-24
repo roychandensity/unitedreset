@@ -83,6 +83,10 @@
     </form>
   </div>
   <script>
+    const BASE_PATH = window.location.pathname.startsWith('/iah-c-north') ? '/iah-c-north' : '';
+    const LOGIN_PATH = `${BASE_PATH}/login`;
+    const HOME_PATH = BASE_PATH ? `${BASE_PATH}/` : '/';
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const password = document.getElementById('password').value;
@@ -90,14 +94,14 @@
       errorMsg.style.display = 'none';
 
       try {
-        const res = await fetch('/login', {
+        const res = await fetch(LOGIN_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password })
         });
 
         if (res.ok) {
-          window.location.href = '/';
+          window.location.href = HOME_PATH;
         } else {
           errorMsg.style.display = 'block';
         }

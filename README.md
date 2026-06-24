@@ -5,8 +5,9 @@ Live occupancy display for United Airlines with manual count override/reset and 
 ## Building Context
 
 - **Customer:** United Airlines
-- **Location:** O'Hare Airport, Terminal B6
-- **Scope:** Single space monitoring
+- **Primary location:** O'Hare Airport, Terminal B6
+- **Additional location:** United IAH C-North
+- **Scope:** Multi-lounge monitoring with isolated auth, reset state, history, and usage stats per lounge
 
 ## Features
 
@@ -36,6 +37,8 @@ Live occupancy display for United Airlines with manual count override/reset and 
 ## Deployment
 
 - **Hosting:** Vercel at [unitedreset.vercel.app](https://unitedreset.vercel.app)
+- **B6 URL:** `/`
+- **IAH C-North URL:** `/iah-c-north`
 - **Session persistence:** Upstash Redis
 
 ## Setup
@@ -52,9 +55,15 @@ The server runs on port 3000 by default.
 | Variable | Description |
 |---|---|
 | `DENSITY_API_KEY` | Bearer token for the Density API. `DENSITY_API_TOKEN` is also supported. |
-| `SPACE_IDS` | Comma-separated Density space IDs to monitor |
-| `APP_PASSWORD` | Password for dashboard login |
+| `SPACE_IDS` | Legacy B6 comma-separated Density space IDs. `B6_SPACE_IDS` can also be used. |
+| `APP_PASSWORD` | Legacy B6 dashboard password. `B6_APP_PASSWORD` can also be used. |
+| `IAH_CNORTH_SPACE_IDS` | IAH C-North comma-separated Density space IDs. Use `spc_1560021226523460540`. |
+| `IAH_CNORTH_APP_PASSWORD` | IAH C-North dashboard password. Defaults to `unitediah` if unset. |
 | `SESSION_SECRET` | Secret used to sign Express sessions |
 | `PORT` | Server port (defaults to 3000) |
 | `KV_REST_API_URL` | Upstash Redis REST URL. `UPSTASH_REDIS_REST_URL` is also supported. |
 | `KV_REST_API_TOKEN` | Upstash Redis REST token. `UPSTASH_REDIS_REST_TOKEN` is also supported. |
+
+## Lounge Isolation
+
+B6 keeps the original `/` route and legacy Redis keys so existing reset state, history, and usage stats remain available. IAH C-North uses `/iah-c-north`, its own auth cookie, and Redis keys prefixed with `lounge:iah-c-north:` so its reset history and usage stats are separate.
