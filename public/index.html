@@ -485,7 +485,7 @@
           <img src="/density-logo.jpg" alt="Density" class="logo-img">
           <div class="logo">Density</div>
         </div>
-        <div class="logo-subtitle">Manual Reset</div>
+        <div class="logo-subtitle" id="lounge-subtitle">Manual Reset</div>
       </div>
       <button class="logout-btn" id="logout-btn">Logout</button>
     </div>
@@ -535,14 +535,33 @@
     const RADIUS = 30;
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
     const POLL_INTERVAL = 5000; // 5 seconds
+    const BASE_PATH = window.location.pathname.startsWith('/iah-c-north') ? '/iah-c-north' : '';
+
+    function apiUrl(path) {
+      return `${BASE_PATH}/api${path}`;
+    }
+
+    function pageUrl(path = '/') {
+      return BASE_PATH ? `${BASE_PATH}${path}` : path;
+    }
 
     let spacesCache = {};
     let editingSpaceId = null;
     let activeOverrides = {};
 
+    async function fetchConfig() {
+      try {
+        const res = await fetch(apiUrl('/config'));
+        if (!res.ok) return;
+        const config = await res.json();
+        document.getElementById('lounge-subtitle').textContent = `${config.name} Manual Reset`;
+        document.title = `${config.name} Live Occupancy`;
+      } catch {}
+    }
+
     async function fetchOverrideStatus() {
       try {
-        const res = await fetch('/api/override/status');
+        const res = await fetch(apiUrl('/override/status'));
         if (res.ok) activeOverrides = await res.json();
       } catch {}
     }
@@ -629,7 +648,7 @@
       if (isNaN(newCount) || newCount < 0) return;
 
       try {
-        const res = await fetch('/api/override', {
+        const res = await fetch(apiUrl('/override'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ spaceId, newCount })
@@ -647,7 +666,7 @@
 
     async function clearOverride(spaceId) {
       try {
-        await fetch('/api/override/clear', {
+        await fetch(apiUrl('/override/clear'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ spaceId })
@@ -670,9 +689,9 @@
     }
 
     async function fetchSpaces() {
-      const res = await fetch('/api/spaces');
+      const res = await fetch(apiUrl('/spaces'));
       if (res.status === 401) {
-        window.location.href = '/';
+        window.location.href = pageUrl('/');
         return [];
       }
       if (!res.ok) throw new Error('Failed to fetch spaces');
@@ -682,9 +701,9 @@
     }
 
     async function fetchOccupancy() {
-      const res = await fetch('/api/occupancy');
+      const res = await fetch(apiUrl('/occupancy'));
       if (res.status === 401) {
-        window.location.href = '/';
+        window.location.href = pageUrl('/');
         return {};
       }
       if (!res.ok) throw new Error('Failed to fetch occupancy');
@@ -709,8 +728,8 @@
 
     // Logout
     document.getElementById('logout-btn').addEventListener('click', async () => {
-      await fetch('/logout', { method: 'POST' });
-      window.location.href = '/';
+      await fetch(`${BASE_PATH}/logout`, { method: 'POST' });
+      window.location.href = pageUrl('/');
     });
 
     // Reset log
@@ -801,7 +820,7 @@
 
     async function fetchLog() {
       try {
-        const res = await fetch('/api/log');
+        const res = await fetch(apiUrl('/log'));
         if (!res.ok) return;
         allLogEntries = await res.json();
         renderLog();
@@ -832,7 +851,7 @@
       document.getElementById('stats-30d').classList.toggle('active', days === 30);
 
       try {
-        const res = await fetch(`/api/stats?days=${days}`);
+        const res = await fetch(apiUrl(`/stats?days=${days}`));
         if (!res.ok) return;
         const data = await res.json();
         renderStats(data);
@@ -909,7 +928,7 @@
     }
 
     // Initial load + polling
-    Promise.all([fetchSpaces(), fetchOverrideStatus()]).then(() => {
+    Promise.all([fetchConfig(), fetchSpaces(), fetchOverrideStatus()]).then(() => {
       refresh();
       fetchLog();
     });
