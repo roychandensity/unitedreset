@@ -6,7 +6,7 @@ Live occupancy display for United Airlines with manual count override/reset and 
 
 - **Customer:** United Airlines
 - **Primary location:** O'Hare Airport, Terminal B6
-- **Additional location:** United IAH C-North
+- **Additional locations:** United IAH C-North, United Lounge B18
 - **Scope:** Multi-lounge monitoring with isolated auth, reset state, history, and usage stats per lounge
 
 ## Features
@@ -39,6 +39,7 @@ Live occupancy display for United Airlines with manual count override/reset and 
 - **Hosting:** Vercel at [unitedreset.vercel.app](https://unitedreset.vercel.app)
 - **B6 URL:** `/`
 - **IAH C-North URL:** `/iah-c-north`
+- **B18 URL:** `/b18`
 - **Session persistence:** Upstash Redis
 
 ## Setup
@@ -59,6 +60,8 @@ The server runs on port 3000 by default.
 | `APP_PASSWORD` | Legacy B6 dashboard password. `B6_APP_PASSWORD` can also be used. |
 | `IAH_CNORTH_SPACE_IDS` | IAH C-North comma-separated Density space IDs. Use `spc_1560021226523460540`. |
 | `IAH_CNORTH_APP_PASSWORD` | IAH C-North dashboard password. Defaults to `unitediah` if unset. |
+| `B18_SPACE_IDS` | B18 comma-separated Density space IDs. Defaults to `spc_1535397102509621944`. |
+| `B18_APP_PASSWORD` | B18 dashboard password. Set this in Vercel Environment Variables. `B18_PASSWORD` is also supported. |
 | `SESSION_SECRET` | Secret used to sign Express sessions |
 | `PORT` | Server port (defaults to 3000) |
 | `KV_REST_API_URL` | Upstash Redis REST URL. `UPSTASH_REDIS_REST_URL` is also supported. |
@@ -66,4 +69,4 @@ The server runs on port 3000 by default.
 
 ## Lounge Isolation
 
-B6 keeps the original `/` route and legacy Redis keys so existing reset state, history, and usage stats remain available. IAH C-North uses `/iah-c-north`, its own auth cookie, and Redis keys prefixed with `lounge:iah-c-north:` so its reset history and usage stats are separate.
+B6 keeps the original `/` route and legacy Redis keys so existing reset state, history, and usage stats remain available. IAH C-North uses `/iah-c-north` and B18 uses `/b18`. Each non-legacy lounge has its own auth cookie and Redis keys prefixed with `lounge:<slug>:` so reset history and usage stats are separate.
