@@ -60,7 +60,7 @@ The server runs on port 3000 by default.
 | `APP_PASSWORD` | Legacy B6 dashboard password. `B6_APP_PASSWORD` can also be used. |
 | `IAH_CNORTH_SPACE_IDS` | IAH C-North comma-separated Density space IDs. Use `spc_1560021226523460540`. |
 | `IAH_CNORTH_APP_PASSWORD` | IAH C-North dashboard password. Defaults to `unitediah` if unset. |
-| `B18_SPACE_IDS` | B18 comma-separated Density space IDs. Defaults to `spc_1535397102509621944`. |
+| `B18_SPACE_IDS` | B18 comma-separated Density space IDs. Defaults to `spc_1522671975590265655`. |
 | `B18_APP_PASSWORD` | B18 dashboard password. Set this in Vercel Environment Variables. `B18_PASSWORD` is also supported. |
 | `SESSION_SECRET` | Secret used to sign Express sessions |
 | `PORT` | Server port (defaults to 3000) |

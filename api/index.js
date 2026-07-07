@@ -52,7 +52,7 @@ const LOUNGES = {
     cookieName: 'auth_b18',
     cookiePath: '/b18',
     password: process.env.B18_APP_PASSWORD || process.env.B18_PASSWORD,
-    spaceIds: parseList(process.env.B18_SPACE_IDS || 'spc_1535397102509621944'),
+    spaceIds: parseList(process.env.B18_SPACE_IDS || 'spc_1522671975590265655'),
     useLegacyRedisKeys: false,
   },
 };
