@@ -83,10 +83,7 @@
     </form>
   </div>
   <script>
-    const LOUNGE_PATHS = ['/iah-c-north', '/b18'];
-    const BASE_PATH = LOUNGE_PATHS.find(path =>
-      window.location.pathname === path || window.location.pathname.startsWith(`${path}/`)
-    ) || '';
+    const BASE_PATH = window.location.pathname.startsWith('/iah-c-north') ? '/iah-c-north' : '';
     const LOGIN_PATH = `${BASE_PATH}/login`;
     const HOME_PATH = BASE_PATH ? `${BASE_PATH}/` : '/';
 

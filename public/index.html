@@ -535,10 +535,7 @@
     const RADIUS = 30;
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
     const POLL_INTERVAL = 5000; // 5 seconds
-    const LOUNGE_PATHS = ['/iah-c-north', '/b18'];
-    const BASE_PATH = LOUNGE_PATHS.find(path =>
-      window.location.pathname === path || window.location.pathname.startsWith(`${path}/`)
-    ) || '';
+    const BASE_PATH = window.location.pathname.startsWith('/iah-c-north') ? '/iah-c-north' : '';
 
     function apiUrl(path) {
       return `${BASE_PATH}/api${path}`;

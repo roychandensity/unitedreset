@@ -45,33 +45,13 @@ const LOUNGES = {
     spaceIds: parseList(process.env.IAH_CNORTH_SPACE_IDS || 'spc_1560021226523460540'),
     useLegacyRedisKeys: false,
   },
-  b18: {
-    slug: 'b18',
-    name: 'United Lounge B18',
-    path: '/b18',
-    cookieName: 'auth_b18',
-    cookiePath: '/b18',
-    password: process.env.B18_APP_PASSWORD || process.env.B18_PASSWORD,
-    spaceIds: parseList(process.env.B18_SPACE_IDS || 'spc_1535397102509621944'),
-    useLegacyRedisKeys: false,
-  },
 };
 
 function getLoungeFromPath(pathname) {
   if (pathname === '/iah-c-north' || pathname.startsWith('/iah-c-north/')) {
     return LOUNGES['iah-c-north'];
   }
-  if (pathname === '/b18' || pathname.startsWith('/b18/')) {
-    return LOUNGES.b18;
-  }
   return LOUNGES.b6;
-}
-
-function routesFor(suffix = '') {
-  return Object.values(LOUNGES).flatMap(lounge => {
-    if (!lounge.path) return [`/${suffix}`];
-    return suffix ? [`${lounge.path}/${suffix}`] : [lounge.path, `${lounge.path}/`];
-  });
 }
 
 function attachLounge(req, res, next) {
@@ -154,16 +134,16 @@ app.get('/density-logo.jpg', (req, res) => {
 });
 
 // Login page (served for unauthenticated users)
-app.get(routesFor(), (req, res, next) => {
+app.get(['/', '/iah-c-north', '/iah-c-north/'], (req, res, next) => {
   if (getAuth(req)) return next();
   res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
 });
 
 // Login endpoint
-app.post(routesFor('login'), async (req, res) => {
+app.post(['/login', '/iah-c-north/login'], async (req, res) => {
   const { password } = req.body;
   const lounge = req.lounge;
-  if (lounge.password && password === lounge.password) {
+  if (password === lounge.password) {
     await trackEvent(req, 'login');
     const token = jwt.sign({ authenticated: true, lounge: lounge.slug }, JWT_SECRET, { expiresIn: '24h' });
     res.setHeader('Set-Cookie', cookie.serialize(lounge.cookieName, token, {
@@ -180,7 +160,7 @@ app.post(routesFor('login'), async (req, res) => {
 });
 
 // Logout
-app.post(routesFor('logout'), (req, res) => {
+app.post(['/logout', '/iah-c-north/logout'], (req, res) => {
   const lounge = req.lounge;
   res.setHeader('Set-Cookie', cookie.serialize(lounge.cookieName, '', {
     httpOnly: true,
@@ -193,11 +173,11 @@ app.post(routesFor('logout'), (req, res) => {
 });
 
 // Dashboard page (served for authenticated users)
-app.get(routesFor(), requireAuth, (req, res) => {
+app.get(['/', '/iah-c-north', '/iah-c-north/'], requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.get(routesFor('api/config'), requireAuth, (req, res) => {
+app.get(['/api/config', '/iah-c-north/api/config'], requireAuth, (req, res) => {
   res.json({
     slug: req.lounge.slug,
     name: req.lounge.name,
@@ -206,7 +186,7 @@ app.get(routesFor('api/config'), requireAuth, (req, res) => {
 });
 
 // Proxy: get space details from Density (tracks as page_view since it's called on initial load)
-app.get(routesFor('api/spaces'), requireAuth, async (req, res) => {
+app.get(['/api/spaces', '/iah-c-north/api/spaces'], requireAuth, async (req, res) => {
   await trackEvent(req, 'page_view');
   try {
     const spaceIds = getSpaceIds(req.lounge);
@@ -230,7 +210,7 @@ app.get(routesFor('api/spaces'), requireAuth, async (req, res) => {
 });
 
 // Proxy: get current occupancy from Density
-app.get(routesFor('api/occupancy'), requireAuth, async (req, res) => {
+app.get(['/api/occupancy', '/iah-c-north/api/occupancy'], requireAuth, async (req, res) => {
   try {
     const spaceIds = getSpaceIds(req.lounge);
     const response = await fetch('https://api.density.io/v3/analytics/occupancy/current', {
@@ -270,7 +250,7 @@ app.get(routesFor('api/occupancy'), requireAuth, async (req, res) => {
 });
 
 // Set manual count override for a space
-app.post(routesFor('api/override'), requireAuth, async (req, res) => {
+app.post(['/api/override', '/iah-c-north/api/override'], requireAuth, async (req, res) => {
   const { spaceId, newCount } = req.body;
   if (!spaceId || typeof newCount !== 'number') {
     return res.status(400).json({ error: 'spaceId and newCount (number) required' });
@@ -321,7 +301,7 @@ app.post(routesFor('api/override'), requireAuth, async (req, res) => {
 });
 
 // Clear override for a space
-app.post(routesFor('api/override/clear'), requireAuth, async (req, res) => {
+app.post(['/api/override/clear', '/iah-c-north/api/override/clear'], requireAuth, async (req, res) => {
   if (!requireRedis(res)) return;
   await trackEvent(req, 'clear');
   const { spaceId } = req.body;
@@ -359,7 +339,7 @@ app.post(routesFor('api/override/clear'), requireAuth, async (req, res) => {
 });
 
 // Get reset history log
-app.get(routesFor('api/log'), requireAuth, async (req, res) => {
+app.get(['/api/log', '/iah-c-north/api/log'], requireAuth, async (req, res) => {
   if (!redis) return res.json([]);
   try {
     const entries = await redis.lrange(redisKey(req.lounge, 'reset_log'), 0, 49);
@@ -372,7 +352,7 @@ app.get(routesFor('api/log'), requireAuth, async (req, res) => {
 });
 
 // Check if a space has an active override
-app.get(routesFor('api/override/status'), requireAuth, async (req, res) => {
+app.get(['/api/override/status', '/iah-c-north/api/override/status'], requireAuth, async (req, res) => {
   try {
     const spaceIds = getSpaceIds(req.lounge);
     const statuses = {};
@@ -397,7 +377,7 @@ app.get(routesFor('api/override/status'), requireAuth, async (req, res) => {
 });
 
 // Usage stats endpoint
-app.get(routesFor('api/stats'), requireAuth, async (req, res) => {
+app.get(['/api/stats', '/iah-c-north/api/stats'], requireAuth, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 7;
     const stats = [];
