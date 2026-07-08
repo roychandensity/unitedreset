@@ -290,6 +290,13 @@
       margin-top: 2px;
     }
 
+    .override-error {
+      color: #f87171;
+      font-size: 12px;
+      margin-top: 6px;
+      text-align: right;
+    }
+
     .reset-btn {
       padding: 8px 16px;
       background: #1b2d44;
@@ -551,6 +558,8 @@
     let spacesCache = {};
     let editingSpaceId = null;
     let activeOverrides = {};
+    let overrideDrafts = {};
+    let overrideError = '';
 
     async function fetchConfig() {
       try {
@@ -585,6 +594,7 @@
         const offset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
         const isEditing = editingSpaceId === space.id;
         const hasOverride = activeOverrides[space.id];
+        const draftValue = overrideDrafts[space.id] ?? count;
 
         return `
           <div class="space-row">
@@ -594,10 +604,15 @@
             </div>
             <div class="space-stats">
               ${isEditing ? `
-                <div class="override-form">
-                  <input type="number" class="override-input" id="override-input-${space.id}" value="${count}" min="0" autofocus>
-                  <button class="override-btn save" onclick="submitOverride('${space.id}')">Set</button>
-                  <button class="override-btn cancel" onclick="cancelOverride()">Cancel</button>
+                <div>
+                  <div class="override-form">
+                    <input type="number" class="override-input" id="override-input-${space.id}" value="${draftValue}" min="0" autofocus
+                      oninput="updateOverrideDraft('${space.id}', this.value)"
+                      onkeydown="handleOverrideKeydown(event, '${space.id}')">
+                    <button class="override-btn save" onclick="submitOverride('${space.id}')">Set</button>
+                    <button class="override-btn cancel" onclick="cancelOverride()">Cancel</button>
+                  </div>
+                  ${overrideError ? `<div class="override-error">${overrideError}</div>` : ''}
                 </div>
               ` : `
                 <button class="reset-btn" onclick="startOverride('${space.id}')">
@@ -637,18 +652,43 @@
 
     function startOverride(spaceId) {
       editingSpaceId = spaceId;
+      overrideDrafts[spaceId] = lastOccupancy[spaceId]?.count ?? 0;
+      overrideError = '';
       renderSpaces(Object.values(spacesCache), lastOccupancy);
     }
 
+    function updateOverrideDraft(spaceId, value) {
+      overrideDrafts[spaceId] = value;
+      overrideError = '';
+    }
+
+    function handleOverrideKeydown(event, spaceId) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submitOverride(spaceId);
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelOverride();
+      }
+    }
+
     function cancelOverride() {
+      if (editingSpaceId) delete overrideDrafts[editingSpaceId];
       editingSpaceId = null;
+      overrideError = '';
       renderSpaces(Object.values(spacesCache), lastOccupancy);
     }
 
     async function submitOverride(spaceId) {
       const input = document.getElementById(`override-input-${spaceId}`);
       const newCount = parseInt(input.value, 10);
-      if (isNaN(newCount) || newCount < 0) return;
+      overrideDrafts[spaceId] = input.value;
+      if (isNaN(newCount) || newCount < 0) {
+        overrideError = 'Enter a valid count';
+        renderSpaces(Object.values(spacesCache), lastOccupancy);
+        return;
+      }
 
       try {
         const res = await fetch(apiUrl('/override'), {
@@ -656,30 +696,46 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ spaceId, newCount })
         });
-        if (!res.ok) throw new Error('Failed to set override');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to set override');
+        }
         activeOverrides[spaceId] = true;
+        delete overrideDrafts[spaceId];
+        overrideError = '';
+        editingSpaceId = null;
+        await fetchOverrideStatus();
+        await refresh();
+        fetchLog();
       } catch (err) {
         console.error(err);
+        overrideError = err.message || 'Failed to set override';
+        renderSpaces(Object.values(spacesCache), lastOccupancy);
       }
-
-      editingSpaceId = null;
-      refresh();
-      fetchLog();
     }
 
     async function clearOverride(spaceId) {
       try {
-        await fetch(apiUrl('/override/clear'), {
+        const res = await fetch(apiUrl('/override/clear'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ spaceId })
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to clear override');
+        }
         delete activeOverrides[spaceId];
+        overrideError = '';
+        refresh();
+        fetchLog();
       } catch (err) {
         console.error(err);
+        editingSpaceId = spaceId;
+        overrideDrafts[spaceId] = lastOccupancy[spaceId]?.count ?? 0;
+        overrideError = err.message || 'Failed to clear override';
+        renderSpaces(Object.values(spacesCache), lastOccupancy);
       }
-      refresh();
-      fetchLog();
     }
 
     let lastOccupancy = {};
@@ -935,7 +991,10 @@
       refresh();
       fetchLog();
     });
-    setInterval(() => { refresh(); fetchLog(); }, POLL_INTERVAL);
+    setInterval(() => {
+      if (!editingSpaceId) refresh();
+      fetchLog();
+    }, POLL_INTERVAL);
   </script>
 </body>
 </html>
