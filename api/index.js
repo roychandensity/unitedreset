@@ -291,14 +291,21 @@ app.post(routesFor('api/override'), requireAuth, async (req, res) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Density API returned ${response.status}`);
+      console.error('Density API returned while setting override:', response.status);
+      return res.status(502).json({ error: `Density API returned ${response.status} while setting override` });
     }
 
     const data = await response.json();
-    const currentCount = data.data[spaceId]?.count ?? 0;
+    const currentCount = data.data?.[spaceId]?.count ?? 0;
     const offset = newCount - currentCount;
 
-    await redis.set(redisKey(req.lounge, `offset:${spaceId}`), offset);
+    try {
+      await redis.set(redisKey(req.lounge, `offset:${spaceId}`), offset);
+    } catch (err) {
+      console.error('Error saving count offset:', err.message);
+      return res.status(502).json({ error: 'Failed to save override in Redis' });
+    }
+
     await trackEvent(req, 'reset');
 
     // Log the override to history
@@ -309,9 +316,13 @@ app.post(routesFor('api/override'), requireAuth, async (req, res) => {
       newCount,
       action: 'override'
     };
-    await redis.lpush(redisKey(req.lounge, 'reset_log'), JSON.stringify(logEntry));
-    // Keep last 100 entries
-    await redis.ltrim(redisKey(req.lounge, 'reset_log'), 0, 99);
+    try {
+      await redis.lpush(redisKey(req.lounge, 'reset_log'), JSON.stringify(logEntry));
+      // Keep last 100 entries
+      await redis.ltrim(redisKey(req.lounge, 'reset_log'), 0, 99);
+    } catch (err) {
+      console.error('Error logging override history:', err.message);
+    }
 
     res.json({ success: true, densityCount: currentCount, newCount, offset });
   } catch (err) {
